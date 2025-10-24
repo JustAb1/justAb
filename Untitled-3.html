@@ -23,13 +23,17 @@
   <ul id="orders"></ul>
 
   <script>
-    // Development default: local backend. Change to your production API URL when deploying.
-    const API = "http://localhost:8080";
+    // API selection:
+    // - In development (running on localhost) use local backend
+    // - In production use same origin (so backend must be proxied or on same host)
+    const API = (location.hostname === 'localhost' || location.hostname === '127.0.0.1')
+      ? 'http://localhost:8080'
+      : window.location.origin;
 
     async function loadOrders() {
       try {
-        const res = await fetch(API + "/orders");
-        if (!res.ok) throw new Error('Network response not ok');
+        const res = await fetch(`${API}/orders`);
+        if (!res.ok) throw new Error('Network response not ok: ' + res.status);
         const data = await res.json();
         const list = document.getElementById("orders");
         list.innerHTML = "";
@@ -39,48 +43,45 @@
         }
         data.forEach(order => {
           const li = document.createElement("li");
-          li.textContent = order;
+          // handle string or object with item property
+          li.textContent = typeof order === 'string' ? order : (order.item || JSON.stringify(order));
           list.appendChild(li);
         });
       } catch (e) {
         const list = document.getElementById("orders");
         list.innerHTML = "<li>Error loading orders. Check backend & CORS.</li>";
-        console.error(e);
+        console.error('loadOrders error:', e);
       }
     }
 
     async function placeOrder() {
       const item = document.getElementById("item").value.trim();
       if (!item) return alert("Please enter an item!");
-      await fetch(API + "/order", {
-        method: "POST",
-        headers: {"Content-Type": "application/x-www-form-urlencoded"},
-        body: "item=" + encodeURIComponent(item)
-      });
-      document.getElementById("item").value = "";
-      loadOrders();
+      try {
+        const res = await fetch(`${API}/order`, {
+          method: "POST",
+          headers: {"Content-Type": "application/x-www-form-urlencoded"},
+          body: "item=" + encodeURIComponent(item)
+        });
+        if (!res.ok) throw new Error('Failed to place order: ' + res.status);
+        document.getElementById("item").value = "";
+        await loadOrders();
+      } catch (e) {
+        console.error('placeOrder error:', e);
+        alert('Could not place order. See console for details.');
+      }
     }
 
     async function undoOrder() {
-      await fetch(API + "/undo", { method: "POST" });
-      loadOrders();
+      try {
+        const res = await fetch(`${API}/undo`, { method: "POST" });
+        if (!res.ok) throw new Error('Failed to undo order: ' + res.status);
+        await loadOrders();
+      } catch (e) {
+        console.error('undoOrder error:', e);
+        alert('Could not undo order. See console for details.');
+      }
     }
-    <!doctype html>
-<html lang="en">
-<head>
-  <meta charset="utf-8" />
-  <meta http-equiv="refresh" content="0; url=/" />
-  <meta name="robots" content="noindex">
-  <title>Not Found</title>
-</head>
-<body>
-  <script>
-    // For SPAs: load index.html so client-side routing can handle the path
-    window.location.replace(window.location.origin + '/');
-  </script>
-  <p>Page not found — redirecting to the home page.</p>
-</body>
-</html>
 
     // initial load
     loadOrders();
