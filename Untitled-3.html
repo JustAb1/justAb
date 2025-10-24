@@ -1,0 +1,73 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <title>FeastNow 🍽️ | Online Food Ordering</title>
+  <style>
+    body { font-family: "Poppins", sans-serif; background: #f9fafb; padding: 40px; text-align: center; }
+    h1 { color: #e63946; margin-bottom: 20px; }
+    input, button { padding: 10px; margin: 5px; font-size: 14px; }
+    ul { background: #fff; padding: 10px; border: 1px solid #ddd; width: 320px; margin: 0 auto; text-align: left; }
+    button { cursor: pointer; background: #457b9d; color: #fff; border: none; border-radius: 5px; }
+    button:hover { background: #1d3557; }
+  </style>
+</head>
+<body>
+  <h1>🍔 Welcome to FeastNow!</h1>
+  <p>Order your favorite meals instantly.</p>
+  <input id="item" placeholder="Enter food item" />
+  <button onclick="placeOrder()">Place Order</button>
+  <button onclick="undoOrder()">Undo Last Order</button>
+
+  <h2>📦 Pending Orders</h2>
+  <ul id="orders"></ul>
+
+  <script>
+    // Development default: local backend. Change to your production API URL when deploying.
+    const API = "http://localhost:8080";
+
+    async function loadOrders() {
+      try {
+        const res = await fetch(API + "/orders");
+        if (!res.ok) throw new Error('Network response not ok');
+        const data = await res.json();
+        const list = document.getElementById("orders");
+        list.innerHTML = "";
+        if (!Array.isArray(data) || data.length === 0) {
+          list.innerHTML = "<li>No current orders.</li>";
+          return;
+        }
+        data.forEach(order => {
+          const li = document.createElement("li");
+          li.textContent = order;
+          list.appendChild(li);
+        });
+      } catch (e) {
+        const list = document.getElementById("orders");
+        list.innerHTML = "<li>Error loading orders. Check backend & CORS.</li>";
+        console.error(e);
+      }
+    }
+
+    async function placeOrder() {
+      const item = document.getElementById("item").value.trim();
+      if (!item) return alert("Please enter an item!");
+      await fetch(API + "/order", {
+        method: "POST",
+        headers: {"Content-Type": "application/x-www-form-urlencoded"},
+        body: "item=" + encodeURIComponent(item)
+      });
+      document.getElementById("item").value = "";
+      loadOrders();
+    }
+
+    async function undoOrder() {
+      await fetch(API + "/undo", { method: "POST" });
+      loadOrders();
+    }
+
+    // initial load
+    loadOrders();
+  </script>
+</body>
+</html>
