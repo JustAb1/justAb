@@ -13,7 +13,7 @@
       OPTIONS /*          -> CORS preflight support
   Compile:
     sudo apt-get install libmicrohttpd-dev    # Debian/Ubuntu (if needed)
-    gcc -o server Untitled-2.c -lmicrohttpd -pthread -std=c11 -Wall -Wextra
+    gcc -o server main.c -lmicrohttpd -pthread -std=c11 -Wall -Wextra
   Run:
     ./server
 */
@@ -256,7 +256,20 @@ static void free_connection_info(void *cls) {
     free(con);
 }
 
-/* ---------- HTTP request handler ---------- */
+/* proper notify-completed callback signature for libmicrohttpd:
+   void (*)(void *cls, struct MHD_Connection *connection, void **con_cls, enum MHD_RequestTerminationCode toe)
+*/
+static void request_completed(void *cls, struct MHD_Connection *connection, void **con_cls, enum MHD_RequestTerminationCode toe) {
+    (void)cls;
+    (void)connection;
+    (void)toe;
+    if (con_cls && *con_cls) {
+        free_connection_info(*con_cls);
+        *con_cls = NULL;
+    }
+}
+
+/* ---------- HTTP helper ---------- */
 static int send_response(struct MHD_Connection *connection, const char *payload, int status) {
     struct MHD_Response *response;
     int ret;
@@ -265,6 +278,9 @@ static int send_response(struct MHD_Connection *connection, const char *payload,
     if (!response) return MHD_NO;
     MHD_add_response_header(response, "Content-Type", "application/json; charset=utf-8");
     MHD_add_response_header(response, "Access-Control-Allow-Origin", "*");
+    /* include allowed headers and methods on actual responses too so browsers accept them */
+    MHD_add_response_header(response, "Access-Control-Allow-Headers", "Content-Type, Accept, Origin");
+    MHD_add_response_header(response, "Access-Control-Allow-Methods", "GET, POST, OPTIONS");
     ret = MHD_queue_response(connection, status, response);
     MHD_destroy_response(response);
     return ret;
@@ -279,13 +295,16 @@ static int answer_to_connection(void *cls,
                      size_t *upload_data_size,
                      void **con_cls)
 {
+    (void)cls;
+    (void)version;
+
     /* Handle CORS preflight */
     if (0 == strcmp(method, "OPTIONS")) {
         struct MHD_Response *response = MHD_create_response_from_buffer(0, NULL, MHD_RESPMEM_PERSISTENT);
         if (!response) return MHD_NO;
         MHD_add_response_header(response, "Access-Control-Allow-Origin", "*");
         MHD_add_response_header(response, "Access-Control-Allow-Methods", "GET, POST, OPTIONS");
-        MHD_add_response_header(response, "Access-Control-Allow-Headers", "Content-Type");
+        MHD_add_response_header(response, "Access-Control-Allow-Headers", "Content-Type, Accept, Origin");
         int ret = MHD_queue_response(connection, MHD_HTTP_OK, response);
         MHD_destroy_response(response);
         return ret;
@@ -377,9 +396,7 @@ static int answer_to_connection(void *cls,
         }
     }
 
-    /* cleanup per-connection context */
-    free_connection_info(*con_cls);
-    *con_cls = NULL;
+    /* Do NOT free per-connection context here; request_completed callback will clean it up */
     return MHD_NO;
 }
 
@@ -402,7 +419,7 @@ int main(void)
         PORT,
         NULL, NULL,
         &answer_to_connection, NULL,
-        MHD_OPTION_NOTIFY_COMPLETED, free_connection_info, NULL,
+        MHD_OPTION_NOTIFY_COMPLETED, request_completed, NULL,
         MHD_OPTION_CONNECTION_TIMEOUT, (unsigned int) 60,
         MHD_OPTION_END);
     if (NULL == daemon) {
@@ -425,4 +442,4 @@ int main(void)
 
     return 0;
 }
-       
+
