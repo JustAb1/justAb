@@ -310,20 +310,25 @@ static int answer_to_connection(void *cls,
         return ret;
     }
 
-    /* Initialize per-connection context for POST accumulation */
+    /* Only initialize per-connection context for POST accumulation */
     if (*con_cls == NULL) {
-        struct connection_info_struct *con = malloc(sizeof(struct connection_info_struct));
-        if (!con) return MHD_NO;
-        con->post_data = NULL;
-        con->size = 0;
-        *con_cls = con;
-        /* For POSTs, keep returning MHD_YES so upload_data will be passed in */
-        return MHD_YES;
+        if (0 == strcmp(method, "POST")) {
+            struct connection_info_struct *con = malloc(sizeof(struct connection_info_struct));
+            if (!con) return MHD_NO;
+            con->post_data = NULL;
+            con->size = 0;
+            *con_cls = con;
+            /* For POSTs, keep returning MHD_YES so upload_data will be passed in */
+            return MHD_YES;
+        }
+        /* For non-POST requests we do not allocate con_cls and proceed immediately */
     }
 
     /* If there's upload data, append it to the buffer */
     if (*upload_data_size != 0) {
+        /* con_cls must have been allocated for POST handling */
         struct connection_info_struct *con = *con_cls;
+        if (!con) return MHD_NO;
         /* limit total size */
         if (con->size + *upload_data_size > MAX_POST_SIZE) {
             /* too large */
@@ -339,8 +344,9 @@ static int answer_to_connection(void *cls,
         return MHD_YES;
     }
 
-    /* All upload data received: process request */
-    struct connection_info_struct *con = *con_cls;
+    /* All upload data received (for POST) or non-POST request: process request */
+    struct connection_info_struct *con = *con_cls; /* may be NULL for GET/other non-POST */
+
     char response_buf[256];
 
     if (0 == strcmp(method, "GET")) {
@@ -363,7 +369,7 @@ static int answer_to_connection(void *cls,
         }
     } else if (0 == strcmp(method, "POST")) {
         if (0 == strcmp(url, "/order")) {
-            if (!con->post_data) {
+            if (!con || !con->post_data) {
                 return send_response(connection, "{\"error\":\"no body\"}", MHD_HTTP_BAD_REQUEST);
             }
             char order_raw[MAX_POST_SIZE];
@@ -442,4 +448,3 @@ int main(void)
 
     return 0;
 }
-
