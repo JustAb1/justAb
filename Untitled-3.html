@@ -65,9 +65,26 @@
       await fetch(API + "/undo", { method: "POST" });
       loadOrders();
     }
+    <!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta http-equiv="refresh" content="0; url=/" />
+  <meta name="robots" content="noindex">
+  <title>Not Found</title>
+</head>
+<body>
+  <script>
+    // For SPAs: load index.html so client-side routing can handle the path
+    window.location.replace(window.location.origin + '/');
+  </script>
+  <p>Page not found — redirecting to the home page.</p>
+</body>
+</html>
 
     // initial load
     loadOrders();
   </script>
 </body>
 </html>
+
